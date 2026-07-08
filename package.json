@@ -20,6 +20,7 @@
   "devDependencies": {
     "@types/mailparser": "^3.4.6",
     "@types/node": "^26.1.0",
+    "ts-node": "^10.9.2",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3"
   }

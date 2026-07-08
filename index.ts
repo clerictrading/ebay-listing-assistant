@@ -210,81 +210,17 @@ async function runClericAutomationPipeline() {
       },
     });
 
-    // ==========================================
-    // NEW DETAILED AUDIT GENERATION ENGINE
-    // ==========================================
     const structuredListing = JSON.parse(response.text!);
-    const generatedSku = `CLERIC-${Date.now()}`;
     
-    // 1. Calculate next auto-incrementing index file name safely
-    let fileIndex = 1;
-    while (fs.existsSync(`audit-${fileIndex}.txt`)) {
-      fileIndex++;
-    }
-    const auditFileName = `audit-${fileIndex}.txt`;
-
-    // 2. Generate a clean, structured plaintext representation for your paperwork
-    const readableAuditOutput = `
-        ==================================================
-        CLERIC TRADING OUTPOST - AUDIT REPORT #${fileIndex}
-        ==================================================
-        SKU REFERENCE  : ${generatedSku}
-        SEO TITLE      : ${structuredListing.seo_title}
-        EBAY CATEGORY  : ${structuredListing.ebay_category_id}
-
-        --------------------------------------------------
-        PRICING ESTIMATION
-        --------------------------------------------------
-        Market Value   : $${structuredListing.pricing_analysis.market_value.toFixed(2)}
-        Sold Range     : ${structuredListing.pricing_analysis.sold_range}
-        Target BIN     : $${structuredListing.pricing_analysis.suggested_bin.toFixed(2)}
-        Minimum Offer  : $${structuredListing.pricing_analysis.min_offer.toFixed(2)}
-        Auction Recom. : ${structuredListing.pricing_analysis.auction_recommended ? 'YES' : 'NO'}
-
-        Pricing Justification:
-        ${structuredListing.pricing_analysis.notes}
-
-        --------------------------------------------------
-        ITEM SPECIFICS
-        --------------------------------------------------
-        Card Name      : ${structuredListing.item_specifics.card_name}
-        Set/Series     : ${structuredListing.item_specifics.set_name}
-        Card Identifier: ${structuredListing.item_specifics.card_number || 'N/A'}
-
-        --------------------------------------------------
-        CONDITION LOG SUMMARY
-        --------------------------------------------------
-        ${structuredListing.condition_summary}
-
-        --------------------------------------------------
-        PHOTO INVENTORY FAULT EVALUATION
-        --------------------------------------------------
-        ${structuredListing.photo_defect_log.map((defect: string) => `[!] ${defect}`).join('\n') || 'No visual anomalies reported.'}
-
-        --------------------------------------------------
-        STORE DESCRIPTION RAW SOURCE
-        --------------------------------------------------
-        ${structuredListing.description_body}
-
-        --------------------------------------------------
-        SHIPPING COMPLIANCE MANAGEMENT
-        --------------------------------------------------
-        ${structuredListing.shipping_recommendation}
-        ==================================================
-        `;
-
-    console.log(auditFileName, JSON.stringify(structuredListing, null, 2));
-    // 3. Write out both backup options to the filesystem
-    console.log(`[*] Writing immutable developer backup to: ${generatedSku}-manifest.json`);
+    // Output 1: Local Printable Inventory manifest configuration
+    const generatedSku = `CLERIC-${Date.now()}`;
+    console.log(`\n[*] Generation verified. Writing local system backup to manifest...`);
     fs.writeFileSync(`${generatedSku}-manifest.json`, JSON.stringify(structuredListing, null, 2));
 
-    console.log(`[+] Writing human-readable validation receipt to: ${auditFileName}`);
-    fs.writeFileSync(auditFileName, readableAuditOutput.trim());
-
-    // 4. Send directly to active eBay drafts
+    // Output 2: Export to active eBay dashboard draft status
     await stageEbayDraft(structuredListing, generatedSku);
 
-    // Optional: Unleash when ready to flag email out of processing queue
+    // Turn this on to mark the incoming message as read once everything processes correctly:
     // await client.messageFlagsAdd(targetMsgId, ['\\Seen']);
 
   } catch (error) {
