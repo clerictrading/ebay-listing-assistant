@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@google/genai": "^2.10.0",
+    "@google/generative-ai": "^0.24.1",
     "dotenv": "^17.4.2",
     "imapflow": "^1.4.6",
     "mailparser": "^3.9.14"

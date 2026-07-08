@@ -146,7 +146,7 @@ async function runClericAutomationPipeline() {
   });
 
   await client.connect();
-  const lock = await client.getMailboxLock('INBOX');
+  const lock = await client.getMailboxLock('Personal');
 
   try {
     const messages = await client.search({ seen: false, from: 'ccleric7@gmail.com' });
@@ -158,10 +158,19 @@ async function runClericAutomationPipeline() {
 
     // Capture the latest single unread package thread
     const targetMsgId = messages[messages.length - 1];
-    console.log(`[*] Target identified: Message ID ${targetMsgId}. Pulling buffer stream...`);
+    const fetchedMessage = await client.fetchOne(targetMsgId, { source: true });
+    const rawMessageSource = fetchedMessage.source;
 
-    const { content } = await client.fetchOne(targetMsgId, { source: true });
-    const parsedEmail = await simpleParser(content);
+    if (!rawMessageSource) {
+      console.log('[-] Process halted: fetched message contains no source content.');
+      return;
+    }
+
+    const parsedEmail = await simpleParser(
+      typeof rawMessageSource === 'string'
+        ? rawMessageSource
+        : Buffer.from(rawMessageSource)
+    );
     const imageParts: any[] = [];
 
     if (parsedEmail.attachments) {
@@ -201,17 +210,81 @@ async function runClericAutomationPipeline() {
       },
     });
 
+    // ==========================================
+    // NEW DETAILED AUDIT GENERATION ENGINE
+    // ==========================================
     const structuredListing = JSON.parse(response.text!);
-    
-    // Output 1: Local Printable Inventory manifest configuration
     const generatedSku = `CLERIC-${Date.now()}`;
-    console.log(`\n[*] Generation verified. Writing local system backup to manifest...`);
+    
+    // 1. Calculate next auto-incrementing index file name safely
+    let fileIndex = 1;
+    while (fs.existsSync(`audit-${fileIndex}.txt`)) {
+      fileIndex++;
+    }
+    const auditFileName = `audit-${fileIndex}.txt`;
+
+    // 2. Generate a clean, structured plaintext representation for your paperwork
+    const readableAuditOutput = `
+        ==================================================
+        CLERIC TRADING OUTPOST - AUDIT REPORT #${fileIndex}
+        ==================================================
+        SKU REFERENCE  : ${generatedSku}
+        SEO TITLE      : ${structuredListing.seo_title}
+        EBAY CATEGORY  : ${structuredListing.ebay_category_id}
+
+        --------------------------------------------------
+        PRICING ESTIMATION
+        --------------------------------------------------
+        Market Value   : $${structuredListing.pricing_analysis.market_value.toFixed(2)}
+        Sold Range     : ${structuredListing.pricing_analysis.sold_range}
+        Target BIN     : $${structuredListing.pricing_analysis.suggested_bin.toFixed(2)}
+        Minimum Offer  : $${structuredListing.pricing_analysis.min_offer.toFixed(2)}
+        Auction Recom. : ${structuredListing.pricing_analysis.auction_recommended ? 'YES' : 'NO'}
+
+        Pricing Justification:
+        ${structuredListing.pricing_analysis.notes}
+
+        --------------------------------------------------
+        ITEM SPECIFICS
+        --------------------------------------------------
+        Card Name      : ${structuredListing.item_specifics.card_name}
+        Set/Series     : ${structuredListing.item_specifics.set_name}
+        Card Identifier: ${structuredListing.item_specifics.card_number || 'N/A'}
+
+        --------------------------------------------------
+        CONDITION LOG SUMMARY
+        --------------------------------------------------
+        ${structuredListing.condition_summary}
+
+        --------------------------------------------------
+        PHOTO INVENTORY FAULT EVALUATION
+        --------------------------------------------------
+        ${structuredListing.photo_defect_log.map((defect: string) => `[!] ${defect}`).join('\n') || 'No visual anomalies reported.'}
+
+        --------------------------------------------------
+        STORE DESCRIPTION RAW SOURCE
+        --------------------------------------------------
+        ${structuredListing.description_body}
+
+        --------------------------------------------------
+        SHIPPING COMPLIANCE MANAGEMENT
+        --------------------------------------------------
+        ${structuredListing.shipping_recommendation}
+        ==================================================
+        `;
+
+    console.log(auditFileName, JSON.stringify(structuredListing, null, 2));
+    // 3. Write out both backup options to the filesystem
+    console.log(`[*] Writing immutable developer backup to: ${generatedSku}-manifest.json`);
     fs.writeFileSync(`${generatedSku}-manifest.json`, JSON.stringify(structuredListing, null, 2));
 
-    // Output 2: Export to active eBay dashboard draft status
+    console.log(`[+] Writing human-readable validation receipt to: ${auditFileName}`);
+    fs.writeFileSync(auditFileName, readableAuditOutput.trim());
+
+    // 4. Send directly to active eBay drafts
     await stageEbayDraft(structuredListing, generatedSku);
 
-    // Turn this on to mark the incoming message as read once everything processes correctly:
+    // Optional: Unleash when ready to flag email out of processing queue
     // await client.messageFlagsAdd(targetMsgId, ['\\Seen']);
 
   } catch (error) {

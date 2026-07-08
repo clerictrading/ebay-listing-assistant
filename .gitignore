@@ -141,3 +141,5 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+audit-1.txt
+CLERIC-1783489922145-manifest.json
