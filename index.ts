@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import eBayApi from 'ebay-api';
+import FormData from 'form-data';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 
@@ -53,10 +54,44 @@ const EbayListingSchema = {
 // ==========================================
 // 2. EBAY API INTEGRATION WORKFLOW (STAGE DRAFT)
 // ==========================================
-async function stageEbayDraft(listingData: any, sku: string): Promise<void> {
+interface ImageAttachment {
+  buffer: Buffer;
+  mimeType: string;
+}
+
+// Uploads each photo to eBay Picture Services (EPS) so the listing has
+// publicly-hosted image URLs to reference — the Inventory API only
+// accepts image URLs, not raw binary data, in the listing payload itself.
+async function uploadImagesToEbay(ebay: eBayApi, images: ImageAttachment[]): Promise<string[]> {
+  const imageUrls: string[] = [];
+
+  for (const [index, image] of images.entries()) {
+    const response = await ebay.trading.UploadSiteHostedPictures({
+      ExtensionInDays: 30
+    }, {
+      hook: (xml: string) => {
+        const form = new FormData();
+        // XML control block must be the first part of the multipart body.
+        form.append('XML Payload', xml, 'payload.xml');
+        form.append('image', image.buffer, {
+          filename: `photo-${index}.jpg`,
+          contentType: image.mimeType
+        });
+        return { body: form, headers: form.getHeaders() };
+      }
+    });
+
+    imageUrls.push(response.SiteHostedPictureDetails.FullURL);
+  }
+
+  return imageUrls;
+}
+
+async function stageEbayDraft(listingData: any, sku: string, images: ImageAttachment[]): Promise<void> {
   const ebay = new eBayApi({
     appId: process.env.EBAY_CLIENT_ID!,
     certId: process.env.EBAY_CLIENT_SECRET!,
+    devId: process.env.EBAY_DEV_ID!,
     sandbox: false,
     marketplaceId: eBayApi.MarketplaceId.EBAY_US,
     scope: [
@@ -72,6 +107,9 @@ async function stageEbayDraft(listingData: any, sku: string): Promise<void> {
   console.log(`[*] Syncing inventory profile to eBay repository for SKU: ${sku}...`);
 
   try {
+    console.log(`[*] Uploading ${images.length} photo(s) to eBay Picture Services...`);
+    const imageUrls = await uploadImagesToEbay(ebay, images);
+
     // Pipeline Component A: Register physical SKU metadata
     await ebay.sell.inventory.createOrReplaceInventoryItem({
       sku: sku,
@@ -84,6 +122,7 @@ async function stageEbayDraft(listingData: any, sku: string): Promise<void> {
         product: {
           title: listingData.seo_title,
           description: listingData.description_body,
+          imageUrls,
           categoryPolicies: { productIdentifierUnavailableText: 'Does Not Apply' },
           aspects: {
             'Card Name': [listingData.item_specifics.card_name],
@@ -172,6 +211,7 @@ async function runClericAutomationPipeline() {
         : Buffer.from(rawMessageSource)
     );
     const imageParts: any[] = [];
+    const imageAttachments: ImageAttachment[] = [];
 
     if (parsedEmail.attachments) {
       for (const attachment of parsedEmail.attachments) {
@@ -181,6 +221,10 @@ async function runClericAutomationPipeline() {
               data: attachment.content.toString('base64'),
               mimeType: attachment.contentType,
             },
+          });
+          imageAttachments.push({
+            buffer: attachment.content,
+            mimeType: attachment.contentType,
           });
         }
       }
@@ -218,7 +262,7 @@ async function runClericAutomationPipeline() {
     fs.writeFileSync(`${generatedSku}-manifest.json`, JSON.stringify(structuredListing, null, 2));
 
     // Output 2: Export to active eBay dashboard draft status
-    await stageEbayDraft(structuredListing, generatedSku);
+    await stageEbayDraft(structuredListing, generatedSku, imageAttachments);
 
     await client.messageFlagsAdd(targetMsgId, ['\\Seen']);
 
