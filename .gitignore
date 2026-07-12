@@ -142,5 +142,5 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 audit-1.txt
-CLERIC-1783489922145-manifest.json
+CLERIC-*-manifest.json
 .env_gemini_chat
