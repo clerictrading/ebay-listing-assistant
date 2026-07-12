@@ -220,8 +220,7 @@ async function runClericAutomationPipeline() {
     // Output 2: Export to active eBay dashboard draft status
     await stageEbayDraft(structuredListing, generatedSku);
 
-    // Turn this on to mark the incoming message as read once everything processes correctly:
-    // await client.messageFlagsAdd(targetMsgId, ['\\Seen']);
+    await client.messageFlagsAdd(targetMsgId, ['\\Seen']);
 
   } catch (error) {
     console.error('[-] Critical Engine Exception:', error);
